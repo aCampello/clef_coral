@@ -1,8 +1,8 @@
+"""Calculates the pixel IoU per substrate of a ClefCoral run"""
 from collections import defaultdict
 
 import cv2
 import numpy as np
-import tqdm
 
 SUBSTRATE_LIST = [
     'c_algae_macro_or_leaves',
@@ -41,8 +41,9 @@ def run_pixel_evaluation(gt_file, run_file, task=2, subset=None):
 
     """
 
-    gt_task_2 = read_annotations_gt(gt_file, task=task)
-    participant_task_2 = read_participant_run(run_file, task=task)
+    gt_task_2 = read_annotations_gt(gt_file, task=task, subset=subset)
+    participant_task_2 = read_participant_run(run_file, task=task,
+                                              subset=subset)
 
     pixel_annotations_gt = convert_pixel_images(gt_task_2)
     pixel_annotations_participant = convert_pixel_images(participant_task_2)
@@ -50,7 +51,8 @@ def run_pixel_evaluation(gt_file, run_file, task=2, subset=None):
     return calculate_iou_metrics_run(pixel_annotations_gt,
                                      pixel_annotations_participant)
 
-def read_annotations_gt(file, task=2):
+
+def read_annotations_gt(file, task=2, subset=None):
     """
     Given a file in the clef coral format, reads the polygons and puts into a
     multilevel dictionary
@@ -69,6 +71,9 @@ def read_annotations_gt(file, task=2):
     with open(file, 'r') as f:
         for row in f:
             row_vec = row[:-1].split(' ')
+            # row_vec[0] is the id in the image
+            if subset and row_vec[0] not in subset:
+                continue
             if task == 1:
                 dimensions = [int(x) for x in row_vec[4:]]
                 x_min = dimensions[2]
@@ -89,7 +94,7 @@ def read_annotations_gt(file, task=2):
     return annotation_dict
 
 
-def read_participant_run(file, task=2):
+def read_participant_run(file, task=2, subset=None):
     """
     Given a participant submission file in the clef format, reads the
     polygons and puts into a multilevel dictionary
@@ -109,6 +114,8 @@ def read_participant_run(file, task=2):
         for row in f:
             row_unrolled = row[:-1].split(';')
             image_id = row_unrolled[0]
+            if subset and image_id not in subset:
+                continue
             predictions = row_unrolled[1:]
 
             for prediction in predictions:
@@ -199,19 +206,21 @@ def calculate_iou_metrics_run(pixel_annotations_gt,
     intersection_per_substrate = defaultdict(int)
     union_per_substrate = defaultdict(int)
 
-    for image in tqdm.tqdm(pixel_annotations_gt.keys()):
+    for image in pixel_annotations_gt.keys():
         for substrate_name, substrate_idx in SUBSTRATE_TO_IDX.items():
             intersection, union = \
                 calculate_agreement(pixel_annotations_gt[image],
-                                    pixel_annotations_participant[image],
+                                    pixel_annotations_participant.get(image, []),
                                     substrate_idx=substrate_idx)
             if union:
                 intersection_per_substrate[substrate_name] += intersection
                 union_per_substrate[substrate_name] += union
 
+    eps = 10e-16
+    # Ads epsilon to the denominator to avoid division by zero
     iou_per_substrate = {
         substrate_name: intersection_per_substrate[substrate_name] /
-                        union_per_substrate[substrate_name]
+                        (union_per_substrate[substrate_name] + eps)
         for substrate_name in SUBSTRATE_LIST
     }
 
@@ -222,14 +231,10 @@ def calculate_iou_metrics_run(pixel_annotations_gt,
 
 
 if __name__ == "__main__":
-    run_file = "../yam/plugins/participant_runs_2020/" \
-               "coral-pixelwise/submission_files/" \
-               "0974fa77-c6ce-43a2-882a-980daed73a3d_" \
-               "submission_segmentation_6_ibla_oversampling_20ep.csv"
-    gt_file = '../yam/plugins/test_set_2020_400_images_annotations_clef_v3/' \
-              'annotations_test_task_2.csv'
+    run_file = "path_to_run.csv"
+    gt_file = 'path_to_groundtruth_file.csv'
 
-    iou_per_substrate, iou_average = run_pixel_evaluation(run_file, gt_file)
+    iou_per_substrate, iou_average = run_pixel_evaluation(gt_file, run_file)
 
     pretty_output = "\n".join(f"{substrate}: {iou}"
                               for substrate, iou in iou_per_substrate.items())

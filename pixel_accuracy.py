@@ -4,6 +4,8 @@ from collections import defaultdict
 import cv2
 import numpy as np
 
+import tqdm
+
 SUBSTRATE_LIST = [
     'c_algae_macro_or_leaves',
     'c_fire_coral_millepora',
@@ -42,6 +44,8 @@ def run_pixel_evaluation(gt_file, run_file, task=2, subset=None):
     """
 
     gt_task_2 = read_annotations_gt(gt_file, task=task, subset=subset)
+
+    print(run_file)
     participant_task_2 = read_participant_run(run_file, task=task,
                                               subset=subset)
 
@@ -76,10 +80,10 @@ def read_annotations_gt(file, task=2, subset=None):
                 continue
             if task == 1:
                 dimensions = [int(x) for x in row_vec[4:]]
-                x_min = dimensions[2]
-                y_min = dimensions[3]
-                x_max = dimensions[0] + dimensions[2]
-                y_max = dimensions[1] + dimensions[3]
+                x_min = dimensions[0]
+                y_min = dimensions[1]
+                x_max = dimensions[2]
+                y_max = dimensions[1]
                 polygon = [(x_min, y_min),
                            (x_min, y_max),
                            (x_max, y_max),
@@ -119,11 +123,18 @@ def read_participant_run(file, task=2, subset=None):
             predictions = row_unrolled[1:]
 
             for prediction in predictions:
+                if prediction[-1] == ' ':
+                    prediction = prediction[:-1]
+
                 substrate, polygons = prediction.split(' ')
                 for polygon in polygons.split(','):
                     confidence, values = polygon.split(':')
                     if task == 1:
                         width_height, x_min, y_min = values.split('+')
+                        if not width_height or not x_min or not y_min:
+                            print("Couldnt find")
+                            print(f"{image_id}, {file}")
+                            continue
                         width, height = width_height.split('x')
                         width, height = int(width), int(height)
                         x_min, y_min = int(x_min), int(y_min)
@@ -161,7 +172,7 @@ def convert_pixel_images(annotation_dict, shape=(4032, 3024)):
     """
 
     pixel_images = {}
-    for image_name, annotations in annotation_dict.items():
+    for image_name, annotations in tqdm.tqdm(annotation_dict.items()):
         pixel_annotations = np.zeros(shape=shape, dtype=np.int32)
         for substrate, idx in SUBSTRATE_TO_IDX.items():
             if annotations.get(substrate):
@@ -206,7 +217,7 @@ def calculate_iou_metrics_run(pixel_annotations_gt,
     intersection_per_substrate = defaultdict(int)
     union_per_substrate = defaultdict(int)
 
-    for image in pixel_annotations_gt.keys():
+    for image in tqdm.tqdm(pixel_annotations_gt.keys()):
         for substrate_name, substrate_idx in SUBSTRATE_TO_IDX.items():
             intersection, union = \
                 calculate_agreement(pixel_annotations_gt[image],

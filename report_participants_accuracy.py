@@ -11,12 +11,14 @@ from pixel_accuracy import run_pixel_evaluation
 def calculate_score_all_runs(runs_json, runs_folder, gt_file, task=2,
                              subset=None):
     results = []
-    for i, run in tqdm(enumerate(runs_json), total=len(runs_json)):
+    for i, run in enumerate(runs_json):
+        print(run['id'])
         participant_id = run['participant_id']
         participant_afiliation = run['participant_affiliation']
         run_id = run['id']
         file_name = run['submission_files'][0]['file_name']
 
+        print(task)
         iou_per_substrate, iou_average = run_pixel_evaluation(
             gt_file=gt_file,
             run_file=os.path.join(runs_folder, 'submission_files', file_name),
@@ -37,13 +39,14 @@ def calculate_score_all_runs(runs_json, runs_folder, gt_file, task=2,
 
 
 if __name__ == "__main__":
-    gt_file = 'path_gt_file.csv'
-
-    runs_folder = 'folder_with_multiple_csv_runs'
-
     parser = argparse.ArgumentParser()
     parser.add_argument('--task', type=int)
+
     task = parser.parse_args().task
+
+    gt_file = f'data/2021_annotations_test_task_{task}.csv'
+    runs_folder = f'data/task_{task}'
+
 
     with open(os.path.join(runs_folder, 'submissions.json'), 'r') as f:
         runs_json = json.load(f)
@@ -51,5 +54,6 @@ if __name__ == "__main__":
     results = calculate_score_all_runs(runs_json, runs_folder, gt_file,
                                        task=task)
 
-    pd.DataFrame(results).to_csv(f'data/pixel_evaluation_task_{task}.csv',
+    pd.DataFrame(results).to_csv(f'data/pixel_evaluation_2021_task_'
+                                 f'{task}_confirm.csv',
                                  index=False)
